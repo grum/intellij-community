@@ -20,6 +20,7 @@ import com.intellij.openapi.util.Comparing;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.psi.*;
 import com.intellij.psi.codeStyle.JavaCodeStyleManager;
+import com.intellij.psi.impl.compiled.InnerClassSourceStrategy;
 import com.intellij.psi.impl.source.PsiImmediateClassType;
 import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.psi.util.TypeConversionUtil;
@@ -94,18 +95,24 @@ public class MergeMethodArguments extends FixableUsageInfo {
     }
     final List<ParameterInfoImpl> parametersInfo = new ArrayList<ParameterInfoImpl>();
     final PsiClassType classType = JavaPsiFacade.getElementFactory(getProject()).createType(psiClass, subst);
-    parametersInfo.add(new ParameterInfoImpl(-1, parameterName, classType, null) {
+    final ParameterInfoImpl e = new ParameterInfoImpl(-1, parameterName, classType, null) {
       @Override
       public PsiExpression getValue(final PsiCallExpression expr) throws IncorrectOperationException {
-        return (PsiExpression)JavaCodeStyleManager.getInstance(getProject()).shortenClassReferences(psiFacade.getElementFactory().createExpressionFromText(getMergedParam(expr), expr));
+        return (PsiExpression)JavaCodeStyleManager.getInstance(getProject())
+          .shortenClassReferences(psiFacade.getElementFactory().createExpressionFromText(getMergedParam(expr), expr));
       }
-    });
+    };
+    int lowestParamIndex = Integer.MAX_VALUE;
     final PsiParameter[] parameters = method.getParameterList().getParameters();
     for (int i = 0; i < parameters.length; i++) {
       if (!isParameterToMerge(i)) {
         parametersInfo.add(new ParameterInfoImpl(i, parameters[i].getName(), parameters[i].getType()));
+      } else if (i < lowestParamIndex) {
+        lowestParamIndex = i;
       }
     }
+    parametersInfo.add(lowestParamIndex == Integer.MAX_VALUE ? 0 : lowestParamIndex, e);
+
     final SmartPsiElementPointer<PsiMethod> meth = SmartPointerManager.getInstance(getProject()).createSmartPsiElementPointer(method);
 
     Runnable performChangeSignatureRunnable = new Runnable() {
